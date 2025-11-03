@@ -4,12 +4,10 @@ const iceConnectionLog = document.getElementById('ice-connection-state'),
   dataChannelLog = document.getElementById('data-channel');
 
 clientId = "000000";
-transmissionId = "475319798"
-transmissionPwd = "111111"
 const websocket = new WebSocket('wss://api.crossdesk.cn:9090');
 
 websocket.onopen = () => {
-  document.getElementById('start').disabled = false;
+  document.getElementById('connect').disabled = false;
   sendLogin();
 }
 
@@ -23,7 +21,6 @@ websocket.onmessage = async (evt) => {
     console.log("logged in as " + clientId);
 
   } else if (message.type == "offer") {
-    document.getElementById('offer-sdp').textContent = message.sdp;
     await handleOffer(message)
   }
 }
@@ -56,37 +53,33 @@ function createPeerConnection() {
   signalingLog.textContent = pc.signalingState;
 
   // Receive audio/video track
-  // Receive audio/video track — 更健壮的处理
+  // More robust handling of audio/video track
   pc.ontrack = (evt) => {
     console.log('ontrack event:', evt);
     const video = document.getElementById('video');
 
-    // 只处理 video track
+    // Only handle video track
     if (evt.track.kind !== 'video') return;
 
-    // 如果已有流，就别再重新设置 srcObject
+    // Don't reset srcObject if stream already exists
     if (!video.srcObject) {
-      const stream = evt.streams && evt.streams[0]
-        ? evt.streams[0]
-        : new MediaStream([evt.track]);
-
+      const stream = evt.streams && evt.streams[0] ? evt.streams[0] : new MediaStream([evt.track]);
       video.srcObject = stream;
       video.muted = true;
       video.playsInline = true;
-
-      // 延迟一点再播放，避免 srcObject 切换导致 AbortError
+      // Set delayed playback
       setTimeout(() => {
         video.play().catch(err => {
           console.warn('video.play() failed:', err);
         });
-      }, 200);
-
+      }, 500);
       console.log('attached new video stream:', stream.id);
     } else {
-      // 如果已有流，则只添加 track
+      // Add track directly to existing stream
       video.srcObject.addTrack(evt.track);
       console.log('added track to existing stream:', evt.track.id);
     }
+
   };
 
   // Receive data channel
@@ -148,13 +141,12 @@ async function sendAnswer(pc) {
   await waitGatheringComplete();
 
   const answer = pc.localDescription;
-  document.getElementById('answer-sdp').textContent = answer.sdp;
 
   msg = JSON.stringify({
     type: "answer",
-    transmission_id: transmissionId,
+    transmission_id: getTransmissionId(),
     user_id: clientId,
-    remote_user_id: transmissionId,
+    remote_user_id: getTransmissionId(),
     sdp: answer.sdp,
   });
   console.log("send answer: " + msg);
@@ -176,25 +168,45 @@ function sendLogin() {
   console.log("send login");
 }
 
+function leaveTransmission() {
+  websocket.send(JSON.stringify({
+    type: "leave_transmission",
+    user_id: clientId,
+    transmission_id: getTransmissionId(),
+  }));
+}
+
+function getTransmissionId() {
+  return document.getElementById('transmission-id').value;
+}
+
+// Add function to get password
+function getTransmissionPwd() {
+  return document.getElementById('transmission-pwd').value;
+}
+
+// Modify sendRequest function to use dynamic password
 function sendRequest() {
   websocket.send(JSON.stringify({
     type: "join_transmission",
     user_id: clientId,
-    transmission_id: transmissionId + '@' + transmissionPwd,
+    transmission_id: getTransmissionId() + '@' + getTransmissionPwd(),
   }));
 }
 
-function start() {
-  document.getElementById('start').style.display = 'none';
-  document.getElementById('stop').style.display = 'inline-block';
+function connect() {
+  document.getElementById('connect').style.display = 'none';
+  document.getElementById('disconnect').style.display = 'inline-block';
   document.getElementById('media').style.display = 'block';
   sendRequest();
 }
 
-function stop() {
-  document.getElementById('stop').style.display = 'none';
+function disconnect() {
+  document.getElementById('disconnect').style.display = 'none';
   document.getElementById('media').style.display = 'none';
-  document.getElementById('start').style.display = 'inline-block';
+  document.getElementById('connect').style.display = 'inline-block';
+
+  leaveTransmission();
 
   // close data channel
   if (dc) {
