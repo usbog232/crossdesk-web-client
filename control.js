@@ -336,7 +336,15 @@
             this.state.touchLastPos = { x: event.clientX, y: event.clientY };
           }
         }
-        this.elements.video?.setPointerCapture?.(event.pointerId ?? 0);
+        // Try to capture pointer, but handle errors gracefully
+        if (this.elements.video && event.pointerId !== undefined && event.pointerId !== null) {
+          try {
+            this.elements.video.setPointerCapture(event.pointerId);
+          } catch (err) {
+            // Ignore errors (e.g., element not in document, pointer already captured, etc.)
+            // console.warn("setPointerCapture failed:", err);
+          }
+        }
         return;
       }
 
@@ -349,7 +357,16 @@
         this.requestPointerLock();
       }
 
-      this.elements.video?.setPointerCapture?.(event.pointerId ?? 0);
+      // Try to capture pointer, but handle errors gracefully
+      if (this.elements.video && event.pointerId !== undefined && event.pointerId !== null) {
+        try {
+          this.elements.video.setPointerCapture(event.pointerId);
+        } catch (err) {
+          // Ignore errors (e.g., element not in document, pointer already captured, etc.)
+          // console.warn("setPointerCapture failed:", err);
+        }
+      }
+      
       this.sendMouseAction({
         x: this.state.normalizedPos.x,
         y: this.state.normalizedPos.y,
